@@ -1,8 +1,9 @@
 from typing import Optional
 
 # from fastapi import FastAPI
-from fastapi import FastAPI
+from fastapi import FastAPI,Path,Query,HTTPException
 from pydantic import BaseModel, Field
+from starlette import status
 
 app = FastAPI()
 
@@ -13,15 +14,13 @@ class students:
     age: int
     mail: str
     pincode: int
-    joined_date:int
 
-    def __init__(self, id, name, age, mail, pincode,joined_date):
+    def __init__(self, id, name, age, mail, pincode,):
         self.id = id
         self.name = name
         self.age = age
         self.mail = mail
         self.pincode = pincode
-        self.joined_date=joined_date
 
 
 class Create_studentlist(BaseModel):
@@ -32,7 +31,6 @@ class Create_studentlist(BaseModel):
     age: int = Field(gt=18, le=45)
     mail: str = Field(max_length=99, min_length=3)
     pincode: int = Field(ge=100000, le=999999)
-    joined_date:int=Field()
     model_config = {
         "json_schema_extra": {
             "example": {
@@ -54,7 +52,7 @@ student = [
 ]
 
 
-@app.get("/get_studetnt/list")
+@app.get("/get_studetnt/list", status_code= status.HTTP_200_OK)
 def getall_students():
     return student
 
@@ -66,7 +64,7 @@ def getall_students():
 #     return student
 
 
-@app.post("/Student/list/validation")
+@app.post("/Student/list/validation",status_code=status.HTTP_201_CREATED)
 def create_list(list: Create_studentlist):
     newList = students(**list.model_dump())
     student.append(getid(newList))
@@ -85,7 +83,7 @@ def getid(value: student):
 
 
 @app.get("/filter_byage")
-def filter_by_age(filter: int):
+def filter_by_age(filter: int = Query(gt=18 ,le=45)):
 
     filter_list = []
 
@@ -94,8 +92,7 @@ def filter_by_age(filter: int):
             filter_list.append(i)
         if filter_list:
             return filter_list
-        else:
-            return "Sorry we didn't have the data"
+        raise HTTPException(status_code=404,detail="Item not found")
     return filter_list
 
 
@@ -107,13 +104,17 @@ def update_list(update: Create_studentlist):
         if student[list].id == update.id:
             student[list] = update
 
-
+# implemented for validation for path paramter
 @app.delete("/delete_student{del_id}")
-def delete_student(del_id:int):
+def delete_student(del_id:int = Path(gt=0)): 
+    delete_status=False
     for i in range(len(student)):
         if student[i].id == del_id:
+            delete_status=True
             student.pop(i)
-
+            break
+    if not delete_status:
+        raise HTTPException(status_code=404,detail="Delete is already deleted")
 
 # list = []
 # for _ in range(int(input())):
