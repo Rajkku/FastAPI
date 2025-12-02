@@ -1,13 +1,13 @@
 from datetime import datetime, timedelta, timezone
 from typing import Annotated
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, status, HTTPException
 from pydantic import BaseModel, Field
 from model import Teacher
 from passlib.context import CryptContext
 from sqlalchemy.orm import Session
 from database import session
-from fastapi.security import OAuth2PasswordRequestForm
-from jose import jwt
+from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer
+from jose import jwt, JWTError
 
 
 route = APIRouter()
@@ -16,6 +16,10 @@ SCERECT_KEY = "4a25e8316eab083f2eb136d1d51eb78bc292a7ea1b7818dedfe6bd7d91374976"
 ALGORITHM = "HS256"
 
 Hashing = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+Bearer = OAuth2PasswordBearer(
+    tokenUrl="token",
+)
 
 
 class TeacherList(BaseModel):
@@ -42,9 +46,13 @@ def authenticate(username: str, password: str, db):
     list = db.query(Teacher).filter(Teacher.name == username).first()
 
     if not list:
-        return {"Unable to Find userName"}
+
+        raise HTTPException(detail="No user found")
     if not Hashing.verify(password, list.Hashpassword):
-        return False
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="No password found"
+        )
+
     return list
 
 
@@ -53,6 +61,18 @@ def jws(username: str, user_id: int, Time: timedelta):
     expires = datetime.now(timezone.utc) + Time
     encode.update({"exp": expires})
     return jwt.encode(encode, SCERECT_KEY, algorithm=ALGORITHM)
+
+
+async def getbeartoken(token: Annotated[str, Depends(OAuth2PasswordBearer)]):
+    try:
+        paylod = jwt.decode(token, SCERECT_KEY, algorithms=ALGORITHM)
+        username: str = paylod.get("sub")
+        userid: int = paylod.get("id")
+        if username is None or userid is None:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
+        return {"userName": username, "userid": userid}
+    except JWTError:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
 
 
 @route.get("/get_All_Teacher")
